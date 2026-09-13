@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EYSOR - Eye Tracking Cursor Control</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0e0a 0%, #1a2e1a 50%, #0d1b0d 100%);
+            color: #a8e6a1;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #app {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #video-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 240px;
+            height: 180px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid #4ade80;
+            box-shadow: 0 0 30px rgba(74, 222, 128, 0.4);
+            z-index: 100;
+        }
+
+        #webcam {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        #gaze-cursor {
+            position: fixed;
+            width: 32px;
+            height: 32px;
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.2s;
+        }
+
+        #cursor-ring {
+            width: 100%;
+            height: 100%;
+            border: 3px solid #4ade80;
+            border-radius: 50%;
+            box-shadow: 0 0 15px rgba(74, 222, 128, 0.6), inset 0 0 10px rgba(74, 222, 128, 0.3);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.15); opacity: 1; }
+        }
+
+        #dwell-timer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            height: 100%;
+        }
+
+        #control-panel {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(10, 20, 10, 0.95);
+            border: 2px solid #4ade80;
+            border-radius: 16px;
+            padding: 24px;
+            min-width: 320px;
+            box-shadow: 0 0 40px rgba(74, 222, 128, 0.3);
+            backdrop-filter: blur(10px);
+            z-index: 101;
+        }
+
+        .mode-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(74, 222, 128, 0.2);
+            border: 1px solid #4ade80;
+            border-radius: 12px;
+            font-size: 11px;
+            color: #4ade80;
+            margin-left: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            color: #4ade80;
+            text-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+            letter-spacing: 2px;
+        }
+
+        .status {
+            font-size: 13px;
+            color: #86efac;
+            margin-bottom: 20px;
+            opacity: 0.9;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 8px;
+            background: rgba(74, 222, 128, 0.05);
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .metric-label {
+            color: #86efac;
+        }
+
+        .metric-value {
+            color: #4ade80;
+            font-weight: bold;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            margin: 8px 0;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(74, 222, 128, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+            box-shadow: 0 6px 25px rgba(74, 222, 128, 0.5);
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            background: rgba(74, 222, 128, 0.2);
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        #calibration-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(5, 10, 5, 0.95);
+            z-index: 1000;
+            display: none;
+        }
+
+        #calibration-overlay.active {
+            display: block;
+        }
+
+        .calibration-point {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: radial-gradient(circle, #4ade80 0%, #22c55e 50%, transparent 70%);
+            border: 3px solid #4ade80;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 30px rgba(74, 222, 128, 0.8);
+            animation: oscillate 2s ease-in-out infinite;
+        }
+
+        @keyframes oscillate {
+            0%, 100% { transform: translate(-50%, -50%) translate(0, 0); }
+            25% { transform: translate(-50%, -50%) translate(15px, 0); }
+            50% { transform: translate(-50%, -50%) translate(0, 15px); }
+            75% { transform: translate(-50%, -50%) translate(-15px, 0); }
+        }
+
+        .calibration-progress {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #4ade80;
+            text-align: center;
+            text-shadow: 0 0 20px rgba(74, 222, 128, 0.8);
+        }
+
+        #fps-counter {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(10, 20, 10, 0.9);
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid #4ade80;
+            color: #4ade80;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 102;
+        }
+
+        #glasses-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(5, 10, 5, 0.98);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #glasses-modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, rgba(10, 30, 10, 0.95) 0%, rgba(20, 40, 20, 0.95) 100%);
+            border: 3px solid #4ade80;
+            border-radius: 24px;
+            padding: 48px;
+            max-width: 600px;
+            text-align: center;
+            box-shadow: 0 0 60px rgba(74, 222, 128, 0.5);
+        }
+
+        .modal-content h2 {
+            font-size: 32px;
+            color: #4ade80;
+            margin-bottom: 16px;
+            text-shadow: 0 0 20px rgba(74, 222, 128, 0.6);
+        }
+
+        .modal-content p {
+            font-size: 16px;
+            color: #86efac;
+            margin-bottom: 32px;
+            line-height: 1.6;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+        }
+
+        .modal-button {
+            padding: 20px 40px;
+            font-size: 18px;
+            border-radius: 12px;
+            border: 2px solid #4ade80;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 20px rgba(74, 222, 128, 0.3);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .modal-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(74, 222, 128, 0.5);
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+        }
+
+        .modal-button.secondary {
+            background: rgba(74, 222, 128, 0.15);
+            color: #4ade80;
+        }
+
+        .modal-button.secondary:hover {
+            background: rgba(74, 222, 128, 0.25);
+        }
+
+        .feature-list {
+            text-align: left;
+            margin: 24px 0;
+            padding: 24px;
+            background: rgba(74, 222, 128, 0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(74, 222, 128, 0.2);
+        }
+
+        .feature-list li {
+            color: #86efac;
+            margin: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .feature-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4ade80;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="glasses-modal">
+            <div class="modal-content">
+                <h2>👓 Welcome to EYSOR</h2>
+                <p>For optimal accuracy, please select your configuration:</p>
+
+                <div class="feature-list">
+                    <ul>
+                        <li>🏆 TITAN Fast-Init AI System with Ensemble Learning</li>
+                        <li>3 Core Neural Networks: Primary + Residual + Meta-Learner</li>
+                        <li>Neural Kalman Filter + Quad-Stage Adaptive Filtering</li>
+                        <li>Sub-pixel precision tracking with real-time correction</li>
+                        <li>Glasses mode: 21 features including depth analysis</li>
+                        <li>🎯 Target: &lt; 1px error (professional eye-tracking grade)</li>
+                        <li>🎙️ JARVIS voice assistant with British accent</li>
+                        <li>😌 Frequent eye rest breaks every 3 calibration points</li>
+                    </ul>
+                </div>
+
+                <div class="modal-buttons">
+                    <button class="modal-button secondary" id="btn-no-glasses">
+                        No Glasses
+                    </button>
+                    <button class="modal-button" id="btn-glasses">
+                        I Wear Glasses
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="control-panel">
+            <h1>EYSOR <span class="mode-badge" id="mode-badge">Standard</span></h1>
+            <div class="status" id="status">Initializing...</div>
+
+            <div class="metrics">
+                <div class="metric">
+                    <span class="metric-label">Accuracy:</span>
+                    <span class="metric-value" id="accuracy">—</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Precision:</span>
+                    <span class="metric-value" id="precision">—</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Visual Angle:</span>
+                    <span class="metric-value" id="visual-angle">—</span>
+                </div>
+            </div>
+
+            <button id="btn-calibrate">Start Calibration</button>
+            <button id="btn-verify" disabled>Verify Accuracy</button>
+            <button id="btn-toggle-cursor">Toggle Cursor</button>
+            <button id="btn-toggle-audio">🔊 Mute Audio</button>
+            <button id="btn-switch-mode">Switch Mode</button>
+        </div>
+
+        <div id="video-container">
+            <video id="webcam" autoplay playsinline></video>
+        </div>
+
+        <div id="gaze-cursor">
+            <div id="cursor-ring"></div>
+            <canvas id="dwell-timer" width="32" height="32"></canvas>
+        </div>
+
+        <div id="fps-counter">FPS: <span id="fps">0</span></div>
+
+        <div id="calibration-overlay">
+            <div class="calibration-progress" id="calibration-progress"></div>
+        </div>
+    </div>
+
+    <script type="module" src="/src/app.js"></script>
+</body>
+</html>

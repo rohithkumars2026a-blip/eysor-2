@@ -1,0 +1,19 @@
+{
+  "userId": "user_1789294710231_8exurirbi",
+  "wearsGlasses": true,
+  "screenResolution": {
+    "width": 1536,
+    "height": 730,
+    "dpi": 1.25
+  },
+  "deviceInfo": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "platform": "Win32",
+    "language": "en-US"
+  },
+  "preferences": {
+    "firstUse": 1789297655461
+  },
+  "createdAt": "2026-09-13T11:07:36.769Z",
+  "lastUpdated": "2026-09-13T11:07:36.769Z"
+}
